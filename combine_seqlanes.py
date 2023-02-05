@@ -4,8 +4,8 @@
 combine_seqlanes.py: Combines data from multiple lanes into a single .fq.gz file for further analysis.
 This is often needed for sequencers like the NextSeq.
 Example usage:
-python combine_seqlanes.py indir outdir -common_suffix _S*_L00*_R*_001.fastq.gz
-# python combine_seqlanes.py indir outdir -common_suffix '_S*_L00*_R*_001.fastq.gz'
+python combine_seqlanes.py indir outdir -common_suffix '_S*_L00*_R*_001.fastq.gz'
+(You need to put the common suffix in quotes otherwise the underscore creates a problem)
 Requires Python >= 3.5
 '''
 
@@ -21,7 +21,7 @@ import argparse
 from collections import defaultdict
 
 def concatenate_files(indir, outdir, r1_mark='R1', r2_mark='R2', common_suffix='_S*_L00*_R*_001.fastq.gz', 
-                      lane_marker='L00*', nested_dirs=True):
+                      lane_marker='L00*', nested_dirs=True, delete_originals=False):
     '''
     Find files matching patterns, sort lanes, and combine R1 and R2 files.
     All files must be in the same input directory.
@@ -32,11 +32,11 @@ def concatenate_files(indir, outdir, r1_mark='R1', r2_mark='R2', common_suffix='
     logging.basicConfig(level=logging.DEBUG, filename=os.path.join(outdir, 'combine_nextseq.log'),
     filemode='w', format='%(message)s')
 
-    common_suffix_re = common_suffix.replace('*', '.')
+    # Make it match any number of characters for the suffix, i.e. to allow both S1 and S10
+    common_suffix_re = common_suffix.replace('*', '.*')
     lane_marker_re = lane_marker.replace('*', '.')
     glob_pattern = f'{indir}/**/*{common_suffix}'
     files = glob.glob(glob_pattern, recursive=nested_dirs)
-
     # Make list of dict of sample: [R1 files, R2_files]
     file_info = defaultdict(lambda: [[], []])
     for file in files:
@@ -71,6 +71,12 @@ def concatenate_files(indir, outdir, r1_mark='R1', r2_mark='R2', common_suffix='
                 for lane in infiles:
                     with open(lane, 'rb') as f:
                         shutil.copyfileobj(f, outfile)
+        
+        if delete_originals:
+            for l in file_info[s]:
+                for i in l: 
+                    os.remove(i)
+
         logging.info(f'processed sample {s}')
         logging.info('\n')
     return outdict
@@ -84,9 +90,10 @@ if __name__ == '__main__':
     parser.add_argument('-common_suffix', default='_S*_L00*_R*_001.fastq.gz')
     parser.add_argument('-lane_marker', default='L00*')
     parser.add_argument('--no_nested_dirs', action='store_true', default=False)
+    parser.add_argument('--delete_originals', action='store_true', default=False)
     args = parser.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
     nested_dirs = not args.no_nested_dirs
     outdict = concatenate_files(args.indir, args.outdir, r1_mark=args.r1_mark, r2_mark=args.r2_mark, 
                       common_suffix=args.common_suffix, lane_marker=args.lane_marker, 
-                      nested_dirs=nested_dirs)
+                      nested_dirs=nested_dirs, delete_originals=args.delete_originals)
