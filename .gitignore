@@ -1,4 +1,5 @@
 *
 !combine_seqlanes.py
 !test_combine_seqlanes.py
+!run_checks.py
 !.gitignore
